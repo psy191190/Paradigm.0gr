@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>0G Intelligent NFT (iNFT) Decryptor</title>
+    <script src="cdn.jsdelivr.net"></script>
+    <!-- WalletConnect / Web3Modal for 2026 Standards -->
+    <script src="cdn.jsdelivr.net"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0b0e11; color: #e1e1e1; padding: 2rem; }
+        .container { max-width: 900px; margin: auto; background: #181a20; padding: 2rem; border-radius: 12px; border: 1px solid #333; }
+        button { padding: 12px 24px; font-weight: bold; cursor: pointer; border: none; border-radius: 6px; background: #f0b90b; color: #000; transition: 0.3s; }
+        button:hover { background: #d9a508; }
+        .inft-card { background: #2b2f36; padding: 1.5rem; border-radius: 8px; margin-top: 1rem; border-left: 4px solid #f0b90b; }
+        .status { color: #848e9c; margin-top: 10px; font-size: 0.9rem; }
+        .hidden { display: none; }
+        pre { background: #000; padding: 10px; color: #00ff00; overflow-x: auto; border-radius: 4px; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>0G iNFT Agent "Baking" Tool</h1>
+    <p>Unlock Quantum-Resistant & Bio-Inspired Data from 0G Storage</p>
+
+    <div id="wallet-section">
+        <button id="connectBtn">Connect Trust Wallet / WalletConnect</button>
+        <p id="walletAddr" class="status"></p>
+    </div>
+
+    <div id="inftList" class="hidden">
+        <h2>Detected iNFTs (ERC-7857)</h2>
+        <div id="items"></div>
+    </div>
+</div>
+
+<script>
+// CONFIGURATION
+const RPC_URL = "https://evmrpc.0g.ai";
+const CONTRACT_ADDR = "0x57e463BF845cf328715446b9246fFa536B671A10";
+const STORAGE_PROXY = "https://storage-proxy-galileo.0g.ai"; // 0G Storage Gateway
+
+const ABI = [
+    "function tokenURI(uint256 tokenId) view returns (string)",
+    "function ownerOf(uint256 tokenId) view returns (address)",
+    "function getSealedKey(uint256 tokenId) view returns (bytes)" // Standard ERC-7857 method
+];
+
+const TOKEN_IDS = [
+    "0x4884f4590000000000000000000000000000000000000000000000000000000000000001",
+    "0x4884f4590000000000000000000000000000000000000000000000000000000000000002",
+    "0x4884f4590000000000000000000000000000000000000000000000000000000000000003"
+];
+
+let provider, signer, userAddress;
+
+// 1. WalletConnect Integration
+document.getElementById('connectBtn').onclick = async () => {
+    if (window.ethereum) {
+        // Desktop/MetaMask/Internal Browser
+        provider = new ethers.BrowserProvider(window.ethereum);
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
+    } else {
+        alert("Please use Trust Wallet Browser or a Web3 enabled browser.");
+        return;
+    }
+
+    signer = await provider.getSigner();
+    userAddress = await signer.getAddress();
+    
+    document.getElementById('walletAddr').innerText = `Connected: ${userAddress}`;
+    document.getElementById('inftList').classList.remove('hidden');
+    loadINFTs();
+};
+
+async function loadINFTs() {
+    const contract = new ethers.Contract(CONTRACT_ADDR, ABI, provider);
+    const container = document.getElementById('items');
+    container.innerHTML = '';
+
+    for (const idHex of TOKEN_IDS) {
+        try {
+            const tokenId = BigInt(idHex);
+            const card = document.createElement('div');
+            card.className = 'inft-card';
+            card.innerHTML = `<h3>iNFT ID: ${idHex.slice(-4)}</h3><p>Checking ownership...</p>`;
+            container.appendChild(card);
+
+            // Fetch URI (contains the 0G Storage CID)
+            const rawUri = await contract.tokenURI(tokenId);
+            const metadata = JSON.parse(rawUri);
+            
+            const attrs = metadata.attributes || [];
+            const cid = attrs.find(a => a.trait_type === 'Storage CID')?.value;
+            const fileName = attrs.find(a => a.trait_type === 'File Name')?.value;
+
+            card.innerHTML = `
+                <h3>${fileName || 'Research Asset'}</h3>
+                <p><strong>Status:</strong> Ready to Decrypt</p>
+                <p><strong>0G CID:</strong> <small>${cid}</small></p>
+                <button onclick="downloadAndDecrypt('${cid}', '${idHex}')">Decrypt & Bake for Agent</button>
+                <div id="data-${idHex}" class="hidden"><pre></pre></div>
+            `;
+        } catch (e) {
+            console.error("Error loading token", idHex, e);
+        }
+    }
+}
+
+async function downloadAndDecrypt(cid, idHex) {
+    const statusDiv = document.getElementById(`data-${idHex}`);
+    statusDiv.classList.remove('hidden');
+    statusDiv.querySelector('pre').innerText = "Downloading from 0G Storage Layer...";
+
+    try {
+        // A. Fetch the encrypted file from 0G Proxy
+        const response = await fetch(`${STORAGE_PROXY}/download/${cid}`);
+        const encryptedBlob = await response.text();
+
+        statusDiv.querySelector('pre').innerText = "Encrypted file received. Requesting Decryption from Wallet...";
+
+        // B. Request Decryption Signature
+        // Note: In 2026, 'eth_decrypt' is the standard for ECIES private metadata
+        const decryptedData = await window.ethereum.request({
+            method: 'eth_decrypt',
+            params: [encryptedBlob, userAddress],
+        });
+
+        statusDiv.querySelector('pre').innerText = "SUCCESS! Decrypted Intelligence:\n\n" + decryptedData;
+        
+        // C. Trigger actual file download for your Agent files
+        const blob = new Blob([decryptedData], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `decrypted_${idHex}.txt`;
+        a.click();
+
+    } catch (err) {
+        statusDiv.querySelector('pre').innerText = "Error: " + err.message + 
+            "\n\n(Ensure your Trust Wallet is on 0G Mainnet and supports eth_decrypt)";
+    }
+}
+</script>
+</body>
+</html>
