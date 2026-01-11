@@ -13,7 +13,6 @@
     "react-dom": "latest",
     "ethers": "^5.7.2",
     "@reown/appkit": "latest",
-    "@reown/appkit-adapter-ethers5": "latest",
-    "@0glabs/0g-storage-sdk": "latest"
+    "@reown/appkit-adapter-ethers5": "latest"
   }
 }
